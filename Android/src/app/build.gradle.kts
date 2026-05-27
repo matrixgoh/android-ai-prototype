@@ -28,6 +28,18 @@ plugins {
   kotlin("kapt")
 }
 
+val gitCommitCount: Int =
+    runCatching {
+          providers
+              .exec { commandLine("git", "rev-list", "--count", "HEAD") }
+              .standardOutput
+              .asText
+              .get()
+              .trim()
+              .toInt()
+        }
+        .getOrDefault(33)
+
 android {
   namespace = "com.google.ai.edge.gallery"
   compileSdk = 35
@@ -36,7 +48,7 @@ android {
     applicationId = "com.google.aiedge.gallery"
     minSdk = 31
     targetSdk = 35
-    versionCode = 33
+    versionCode = gitCommitCount
     versionName = "1.0.15"
 
     // Needed for HuggingFace auth workflows.
