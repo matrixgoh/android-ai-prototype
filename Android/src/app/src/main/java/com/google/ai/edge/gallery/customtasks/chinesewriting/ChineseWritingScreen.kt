@@ -120,7 +120,7 @@ fun ChineseWritingScreen(
   // Pixel size of the canvas, captured from layout for accurate bitmap rendering.
   var canvasSizePx by remember { mutableStateOf(0) }
 
-  val modelReady = modelManagerViewModel.isModelInitialized(model = model)
+  val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
   val hasDrawing = strokes.isNotEmpty() || currentStroke.isNotEmpty()
 
