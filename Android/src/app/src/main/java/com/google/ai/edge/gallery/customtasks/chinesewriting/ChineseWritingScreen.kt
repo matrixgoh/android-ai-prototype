@@ -154,6 +154,8 @@ fun ChineseWritingScreen(
 
   val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
+  // True while the conversation is being reset before a fresh recognition.
+  val isResetting = chatUiState.isResettingSession
   val hasDrawing = strokes.isNotEmpty() || currentStroke.isNotEmpty()
 
   // Derive display state from the last significant message so that:
@@ -164,7 +166,7 @@ fun ChineseWritingScreen(
     chatUiState.messagesByModel[model.name]?.lastOrNull {
       it is ChatMessageLoading || it is ChatMessageText || it is ChatMessageError
     }
-  val showSpinner = inProgress && (lastMsg == null || lastMsg is ChatMessageLoading)
+  val showSpinner = (inProgress || isResetting) && (lastMsg == null || lastMsg is ChatMessageLoading)
   val displayText: String? =
     (lastMsg as? ChatMessageText)
       ?.takeIf { it.side == ChatSide.AGENT }
@@ -257,7 +259,7 @@ fun ChineseWritingScreen(
     ) {
       OutlinedButton(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && !inProgress,
+        enabled = hasDrawing && !inProgress && !isResetting,
         onClick = {
           strokes.clear()
           currentStroke = emptyList()
@@ -268,24 +270,36 @@ fun ChineseWritingScreen(
       }
       Button(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && modelReady && !inProgress,
+        enabled = hasDrawing && modelReady && !inProgress && !isResetting,
         onClick = {
+          val task = modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHINESE_WRITING)!!
           val bitmap = strokesToBitmap(strokes.toList())
-          viewModel.generateResponse(
+          // Reset the conversation first so each Identify is a fully independent
+          // recognition with no context bleed from the previous character, and the
+          // previous on-screen result is cleared.
+          viewModel.resetSession(
+            task = task,
             model = model,
-            input = IDENTIFY_PROMPT,
-            images = listOf(bitmap),
-            audioMessages = emptyList(),
-            onError = { errorMessage ->
-              viewModel.handleError(
-                context = context,
-                task = modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHINESE_WRITING)!!,
+            supportImage = true,
+            supportAudio = false,
+            onDone = {
+              viewModel.generateResponse(
                 model = model,
-                modelManagerViewModel = modelManagerViewModel,
-                errorMessage = errorMessage,
+                input = IDENTIFY_PROMPT,
+                images = listOf(bitmap),
+                audioMessages = emptyList(),
+                onError = { errorMessage ->
+                  viewModel.handleError(
+                    context = context,
+                    task = task,
+                    model = model,
+                    modelManagerViewModel = modelManagerViewModel,
+                    errorMessage = errorMessage,
+                  )
+                },
+                allowThinking = false,
               )
             },
-            allowThinking = false,
           )
         },
       ) {
