@@ -61,7 +61,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.BuiltInTaskId
+import com.google.ai.edge.gallery.ui.common.chat.ChatMessageError
+import com.google.ai.edge.gallery.ui.common.chat.ChatMessageLoading
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
+import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 private const val IDENTIFY_PROMPT =
@@ -124,11 +127,19 @@ fun ChineseWritingScreen(
   val inProgress = chatUiState.inProgress
   val hasDrawing = strokes.isNotEmpty() || currentStroke.isNotEmpty()
 
-  // Extract the latest agent text reply (if any) for display.
-  val latestReply: String? =
-    chatUiState.messagesByModel[model.name]
-      ?.lastOrNull { it is ChatMessageText }
-      ?.let { (it as ChatMessageText).content }
+  // Derive display state from the last significant message so that:
+  //   • A fresh Identify request always shows the spinner first (ChatMessageLoading is last).
+  //   • Once tokens start streaming in, the growing text is shown live.
+  //   • A second Identify press correctly shows the spinner again, not the stale old reply.
+  val lastMsg =
+    chatUiState.messagesByModel[model.name]?.lastOrNull {
+      it is ChatMessageLoading || it is ChatMessageText || it is ChatMessageError
+    }
+  val showSpinner = inProgress && (lastMsg == null || lastMsg is ChatMessageLoading)
+  val displayText: String? =
+    (lastMsg as? ChatMessageText)
+      ?.takeIf { it.side == ChatSide.AGENT }
+      ?.content
       ?.takeIf { it.isNotBlank() }
 
   Column(
@@ -255,14 +266,12 @@ fun ChineseWritingScreen(
     ) {
       when {
         !modelReady -> {
+          // Model still loading — show spinner + label.
           Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
           ) {
-            CircularProgressIndicator(
-              modifier = Modifier.padding(4.dp),
-              strokeWidth = 3.dp,
-            )
+            CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 3.dp)
             Text(
               text = stringResource(R.string.chinese_writing_model_loading),
               style = MaterialTheme.typography.bodyMedium,
@@ -271,12 +280,14 @@ fun ChineseWritingScreen(
             )
           }
         }
-        inProgress && latestReply.isNullOrBlank() -> {
+        showSpinner -> {
+          // Waiting for the first tokens of a new inference request.
           CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 3.dp)
         }
-        !latestReply.isNullOrBlank() -> {
+        displayText != null -> {
+          // Show the agent's reply (streams in live as tokens arrive).
           Text(
-            text = latestReply,
+            text = displayText,
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
@@ -284,6 +295,7 @@ fun ChineseWritingScreen(
           )
         }
         else -> {
+          // Nothing drawn or identified yet.
           Text(
             text = stringResource(R.string.chinese_writing_empty_hint),
             style = MaterialTheme.typography.bodyMedium,
