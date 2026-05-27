@@ -49,9 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -67,22 +67,54 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
 import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
-private const val IDENTIFY_PROMPT =
-  "This is a single handwritten Chinese character drawn by a child on a white canvas. " +
-    "Please identify the Chinese character. Respond briefly with: " +
-    "1) The Chinese character itself, 2) Its pinyin pronunciation, 3) Its English meaning. " +
-    "Keep the response short and child-friendly. If the drawing is unclear or not a valid " +
-    "character, gently say so and encourage them to try again."
+private const val OUTPUT_PX = 512
 
-/** Renders the captured strokes into a white-background bitmap suitable for the vision model. */
-private fun strokesToBitmap(strokes: List<List<Offset>>, sizePx: Int): Bitmap {
-  val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+private const val IDENTIFY_PROMPT =
+  "The image shows a single Chinese character (汉字) handwritten by a young child. " +
+    "It is always exactly one real Chinese character, even if the strokes are messy, " +
+    "shaky, uneven, or imperfect — young children have rough handwriting, so be generous " +
+    "and judge by the overall stroke structure and shape, not neatness. " +
+    "Identify the single most likely character. Always commit to your best single guess; " +
+    "never ask a question and never say the drawing is unclear. " +
+    "Reply in exactly this format and nothing else:\n" +
+    "汉字: <the character>\n" +
+    "Pinyin: <pinyin with tone marks>\n" +
+    "Meaning: <short English meaning>"
+
+/**
+ * Renders the captured strokes into a clean white [OUTPUT_PX] square bitmap for the vision model.
+ *
+ * The drawing is cropped to its bounding box and centered so the character fills most of the frame
+ * regardless of where or how small the child wrote it. No guide lines are drawn — the on-screen
+ * grid is purely a visual aid and is intentionally excluded for cleaner recognition.
+ */
+private fun strokesToBitmap(strokes: List<List<Offset>>): Bitmap {
+  val bmp = Bitmap.createBitmap(OUTPUT_PX, OUTPUT_PX, Bitmap.Config.ARGB_8888)
   val canvas = android.graphics.Canvas(bmp)
   canvas.drawColor(android.graphics.Color.WHITE)
+
+  val points = strokes.flatten()
+  if (points.isEmpty()) return bmp
+
+  val minX = points.minOf { it.x }
+  val minY = points.minOf { it.y }
+  val maxX = points.maxOf { it.x }
+  val maxY = points.maxOf { it.y }
+  // Floor the box side so a single dot / thin line doesn't blow up the scale.
+  val side = maxOf(maxX - minX, maxY - minY, 1f)
+  // Content occupies ~80% of the frame, centered.
+  val scale = OUTPUT_PX * 0.8f / side
+  val centerX = (minX + maxX) / 2f
+  val centerY = (minY + maxY) / 2f
+  val tx = OUTPUT_PX / 2f - centerX * scale
+  val ty = OUTPUT_PX / 2f - centerY * scale
+  fun mapX(x: Float) = x * scale + tx
+  fun mapY(y: Float) = y * scale + ty
+
   val paint =
     android.graphics.Paint().apply {
       color = android.graphics.Color.BLACK
-      strokeWidth = sizePx * 0.025f
+      strokeWidth = OUTPUT_PX * 0.045f
       style = android.graphics.Paint.Style.STROKE
       strokeCap = android.graphics.Paint.Cap.ROUND
       strokeJoin = android.graphics.Paint.Join.ROUND
@@ -91,14 +123,13 @@ private fun strokesToBitmap(strokes: List<List<Offset>>, sizePx: Int): Bitmap {
   for (stroke in strokes) {
     if (stroke.isEmpty()) continue
     if (stroke.size == 1) {
-      // A single dot: draw a small point.
-      canvas.drawPoint(stroke[0].x, stroke[0].y, paint)
+      canvas.drawPoint(mapX(stroke[0].x), mapY(stroke[0].y), paint)
       continue
     }
     val path = android.graphics.Path()
-    path.moveTo(stroke[0].x, stroke[0].y)
+    path.moveTo(mapX(stroke[0].x), mapY(stroke[0].y))
     for (i in 1 until stroke.size) {
-      path.lineTo(stroke[i].x, stroke[i].y)
+      path.lineTo(mapX(stroke[i].x), mapY(stroke[i].y))
     }
     canvas.drawPath(path, paint)
   }
@@ -120,8 +151,6 @@ fun ChineseWritingScreen(
   // Each completed stroke is a list of points; the in-progress stroke is appended live.
   val strokes = remember { mutableStateListOf<List<Offset>>() }
   var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
-  // Pixel size of the canvas, captured from layout for accurate bitmap rendering.
-  var canvasSizePx by remember { mutableStateOf(0) }
 
   val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
@@ -165,7 +194,6 @@ fun ChineseWritingScreen(
           .clip(RoundedCornerShape(16.dp))
           .background(Color.White)
           .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
-          .onSizeChanged { canvasSizePx = it.width }
     ) {
       Canvas(
         modifier =
@@ -191,6 +219,17 @@ fun ChineseWritingScreen(
               )
             }
       ) {
+        // 米字格 practice guide: faint dashed center cross + both diagonals (on-screen only).
+        val gridColor = Color.LightGray.copy(alpha = 0.6f)
+        val gridStroke = 1.dp.toPx()
+        val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+        val w = size.width
+        val h = size.height
+        drawLine(gridColor, Offset(w / 2f, 0f), Offset(w / 2f, h), gridStroke, pathEffect = dash)
+        drawLine(gridColor, Offset(0f, h / 2f), Offset(w, h / 2f), gridStroke, pathEffect = dash)
+        drawLine(gridColor, Offset(0f, 0f), Offset(w, h), gridStroke, pathEffect = dash)
+        drawLine(gridColor, Offset(w, 0f), Offset(0f, h), gridStroke, pathEffect = dash)
+
         val strokeWidthPx = size.width * 0.025f
         val allStrokes =
           if (currentStroke.isNotEmpty()) strokes + listOf(currentStroke) else strokes.toList()
@@ -231,8 +270,7 @@ fun ChineseWritingScreen(
         modifier = Modifier.weight(1f),
         enabled = hasDrawing && modelReady && !inProgress,
         onClick = {
-          val sizePx = if (canvasSizePx > 0) canvasSizePx else 1024
-          val bitmap = strokesToBitmap(strokes.toList(), sizePx)
+          val bitmap = strokesToBitmap(strokes.toList())
           viewModel.generateResponse(
             model = model,
             input = IDENTIFY_PROMPT,
