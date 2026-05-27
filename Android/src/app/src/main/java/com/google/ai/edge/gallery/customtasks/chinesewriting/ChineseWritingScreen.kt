@@ -69,7 +69,7 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 /** Increment this every time the screen logic changes so testers can confirm the right build. */
-private const val SCREEN_VERSION = "v5"
+private const val SCREEN_VERSION = "v6"
 
 private const val OUTPUT_PX = 512
 
@@ -194,15 +194,16 @@ fun ChineseWritingScreen(
       )
       Text(
         text = SCREEN_VERSION,
-        fontSize = 11.sp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onPrimary,
         modifier =
           Modifier.align(Alignment.CenterEnd)
             .background(
-              color = MaterialTheme.colorScheme.surfaceVariant,
+              color = MaterialTheme.colorScheme.primary,
               shape = RoundedCornerShape(4.dp),
             )
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 8.dp, vertical = 3.dp),
       )
     }
 
