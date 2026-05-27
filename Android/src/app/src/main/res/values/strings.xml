@@ -38,6 +38,9 @@
   <string name="chinese_writing_model_loading" translatable="false">Loading model…</string>
   <string name="chinese_writing_btn_clear" translatable="false">Clear</string>
   <string name="chinese_writing_btn_identify" translatable="false">Identify</string>
+  <string name="chinese_writing_btn_check" translatable="false">Check</string>
+  <string name="chinese_writing_target_label" translatable="false">Word to write (optional)</string>
+  <string name="chinese_writing_target_placeholder" translatable="false">e.g. 我</string>
   <string name="askaudio_emptystate_title" translatable="false">Ask Audio</string>
   <string name="askaudio_emptystate_content" translatable="false">To get started, tap the + below to add a audio clip (limited to 1 clip up to 30 seconds) and type a prompt to transcribe or translate it!</string>
   <string name="gallery_news_notification_title" translatable="false">Gallery News</string>
