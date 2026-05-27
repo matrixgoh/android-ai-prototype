@@ -222,6 +222,7 @@ fun ChineseWritingScreen(
         onClick = {
           strokes.clear()
           currentStroke = emptyList()
+          viewModel.clearAllMessages(model = model)
         },
       ) {
         Text(stringResource(R.string.chinese_writing_btn_clear))
