@@ -109,10 +109,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.google.ai.edge.gallery.BuildConfig
 import com.google.ai.edge.gallery.GalleryTopAppBar
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.AppBarAction
@@ -131,6 +133,7 @@ import com.google.ai.edge.gallery.ui.common.tos.TosViewModel
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 import com.google.ai.edge.gallery.ui.theme.customColors
 import com.google.ai.edge.gallery.ui.theme.homePageTitleStyle
+import com.google.ai.edge.gallery.ui.theme.labelSmallNarrow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -480,6 +483,14 @@ fun HomeScreen(
                   navigateToTaskScreen = navigateToTaskScreen,
                   gm4 = gm4,
                   grid = grid,
+                )
+
+                Text(
+                  "App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                  style = labelSmallNarrow,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                  textAlign = TextAlign.Center,
                 )
 
                 Spacer(modifier = Modifier.height(innerPadding.calculateBottomPadding() + 10.dp))
