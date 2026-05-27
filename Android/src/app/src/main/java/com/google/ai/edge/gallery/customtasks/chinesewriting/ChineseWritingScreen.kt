@@ -154,8 +154,6 @@ fun ChineseWritingScreen(
 
   val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
-  // True while the conversation is being reset before a fresh recognition.
-  val isResetting = chatUiState.isResettingSession
   val hasDrawing = strokes.isNotEmpty() || currentStroke.isNotEmpty()
 
   // Derive display state from the last significant message so that:
@@ -166,7 +164,7 @@ fun ChineseWritingScreen(
     chatUiState.messagesByModel[model.name]?.lastOrNull {
       it is ChatMessageLoading || it is ChatMessageText || it is ChatMessageError
     }
-  val showSpinner = (inProgress || isResetting) && (lastMsg == null || lastMsg is ChatMessageLoading)
+  val showSpinner = inProgress && (lastMsg == null || lastMsg is ChatMessageLoading)
   val displayText: String? =
     (lastMsg as? ChatMessageText)
       ?.takeIf { it.side == ChatSide.AGENT }
@@ -259,7 +257,7 @@ fun ChineseWritingScreen(
     ) {
       OutlinedButton(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && !inProgress && !isResetting,
+        enabled = hasDrawing && !inProgress,
         onClick = {
           strokes.clear()
           currentStroke = emptyList()
@@ -270,36 +268,32 @@ fun ChineseWritingScreen(
       }
       Button(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && modelReady && !inProgress && !isResetting,
+        enabled = hasDrawing && modelReady && !inProgress,
         onClick = {
           val task = modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHINESE_WRITING)!!
           val bitmap = strokesToBitmap(strokes.toList())
-          // Reset the conversation first so each Identify is a fully independent
-          // recognition with no context bleed from the previous character, and the
-          // previous on-screen result is cleared.
-          viewModel.resetSession(
-            task = task,
+          // Clear the previous result from the display so the UI starts fresh.
+          // We intentionally do NOT reset the underlying conversation — resetSession
+          // has a stale-callback race that lets old tokens bleed into the new result,
+          // and engine KV-cache resets are unreliable across backends. The conversation
+          // accumulates history but the model always responds to the latest turn
+          // (identical to how Ask Image works, which gives correct results).
+          viewModel.clearAllMessages(model = model)
+          viewModel.generateResponse(
             model = model,
-            supportImage = true,
-            supportAudio = false,
-            onDone = {
-              viewModel.generateResponse(
+            input = IDENTIFY_PROMPT,
+            images = listOf(bitmap),
+            audioMessages = emptyList(),
+            onError = { errorMessage ->
+              viewModel.handleError(
+                context = context,
+                task = task,
                 model = model,
-                input = IDENTIFY_PROMPT,
-                images = listOf(bitmap),
-                audioMessages = emptyList(),
-                onError = { errorMessage ->
-                  viewModel.handleError(
-                    context = context,
-                    task = task,
-                    model = model,
-                    modelManagerViewModel = modelManagerViewModel,
-                    errorMessage = errorMessage,
-                  )
-                },
-                allowThinking = false,
+                modelManagerViewModel = modelManagerViewModel,
+                errorMessage = errorMessage,
               )
             },
+            allowThinking = false,
           )
         },
       ) {
