@@ -36,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,7 +70,7 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 /** Increment this every time the screen logic changes so testers can confirm the right build. */
-private const val SCREEN_VERSION = "v7"
+private const val SCREEN_VERSION = "v8"
 
 private const val OUTPUT_PX = 512
 
@@ -84,6 +85,28 @@ private const val IDENTIFY_PROMPT =
     "汉字: <the character>\n" +
     "Pinyin: <pinyin with tone marks>\n" +
     "Meaning: <short English meaning>"
+
+/**
+ * Builds the prompt used when the child has typed the character they were trying to write.
+ *
+ * Giving the model the intended [target] alongside the drawing lets it grade the handwriting
+ * against a known answer rather than guessing blind, which produces a far more reliable match
+ * score than identification alone.
+ */
+private fun checkPrompt(target: String): String =
+  "The image shows a single Chinese character (汉字) handwritten by a young child. " +
+    "The child was trying to write this character: \"$target\". " +
+    "Compare the handwriting in the image against the intended character \"$target\". " +
+    "Young children have rough, shaky, uneven handwriting, so be generous and judge by the " +
+    "overall stroke structure and shape, not neatness. " +
+    "First decide which character the drawing most closely resembles, then give a match " +
+    "accuracy from 0 to 100 percent for how well the drawing matches \"$target\". " +
+    "Always commit to a single number; never ask a question or say the drawing is unclear. " +
+    "Reply in exactly this format and nothing else:\n" +
+    "目标 (Target): $target\n" +
+    "你写的 (You wrote): <the character the drawing looks like>\n" +
+    "准确度 (Accuracy): <number>%\n" +
+    "反馈 (Feedback): <one short encouraging sentence on how to improve>"
 
 /**
  * Renders the captured strokes into a clean white [OUTPUT_PX] square bitmap for the vision model.
@@ -155,6 +178,9 @@ fun ChineseWritingScreen(
   // Each completed stroke is a list of points; the in-progress stroke is appended live.
   val strokes = remember { mutableStateListOf<List<Offset>>() }
   var currentStroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+  // Optional character the child intends to write; when set, the model grades the drawing
+  // against it and returns a match accuracy instead of a blind identification.
+  var targetWord by remember { mutableStateOf("") }
 
   val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
@@ -209,6 +235,17 @@ fun ChineseWritingScreen(
             .padding(horizontal = 8.dp, vertical = 3.dp),
       )
     }
+
+    // Optional target word: when filled, the model checks how well the drawing matches it.
+    OutlinedTextField(
+      value = targetWord,
+      onValueChange = { targetWord = it },
+      label = { Text(stringResource(R.string.chinese_writing_target_label)) },
+      placeholder = { Text(stringResource(R.string.chinese_writing_target_placeholder)) },
+      singleLine = true,
+      enabled = !inProgress && !isResetting,
+      modifier = Modifier.fillMaxWidth(),
+    )
 
     // Drawing canvas: white square with black ink.
     Box(
@@ -304,6 +341,8 @@ fun ChineseWritingScreen(
           // try to clear again and race with the callbacks. The isResettingSession flag
           // keeps both buttons disabled and the spinner visible throughout the whole
           // reset → generate cycle, preventing any double-tap window.
+          val trimmedTarget = targetWord.trim()
+          val prompt = if (trimmedTarget.isEmpty()) IDENTIFY_PROMPT else checkPrompt(trimmedTarget)
           viewModel.resetSession(
             task = task,
             model = model,
@@ -313,7 +352,7 @@ fun ChineseWritingScreen(
             onDone = {
               viewModel.generateResponse(
                 model = model,
-                input = IDENTIFY_PROMPT,
+                input = prompt,
                 images = listOf(bitmap),
                 audioMessages = emptyList(),
                 onError = { errorMessage ->
@@ -331,7 +370,12 @@ fun ChineseWritingScreen(
           )
         },
       ) {
-        Text(stringResource(R.string.chinese_writing_btn_identify))
+        Text(
+          stringResource(
+            if (targetWord.isBlank()) R.string.chinese_writing_btn_identify
+            else R.string.chinese_writing_btn_check
+          )
+        )
       }
     }
 
