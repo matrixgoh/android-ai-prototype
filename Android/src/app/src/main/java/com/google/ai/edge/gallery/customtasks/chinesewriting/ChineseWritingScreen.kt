@@ -69,7 +69,7 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 /** Increment this every time the screen logic changes so testers can confirm the right build. */
-private const val SCREEN_VERSION = "v6"
+private const val SCREEN_VERSION = "v7"
 
 private const val OUTPUT_PX = 512
 
@@ -158,17 +158,20 @@ fun ChineseWritingScreen(
 
   val modelReady = modelManagerUiState.isModelInitialized(model = model)
   val inProgress = chatUiState.inProgress
+  // True while the conversation is being reset — keeps the button disabled and spinner
+  // visible for the full reset → generate cycle, preventing a double-tap gap.
+  val isResetting = chatUiState.isResettingSession
   val hasDrawing = strokes.isNotEmpty() || currentStroke.isNotEmpty()
 
   // Derive display state from the last significant message so that:
-  //   • A fresh Identify request always shows the spinner first (ChatMessageLoading is last).
-  //   • Once tokens start streaming in, the growing text is shown live.
+  //   • clearAllMessages + isResetting=true → lastMsg=null → spinner shows immediately.
+  //   • Once tokens stream in the growing text is shown live.
   //   • A second Identify press correctly shows the spinner again, not the stale old reply.
   val lastMsg =
     chatUiState.messagesByModel[model.name]?.lastOrNull {
       it is ChatMessageLoading || it is ChatMessageText || it is ChatMessageError
     }
-  val showSpinner = inProgress && (lastMsg == null || lastMsg is ChatMessageLoading)
+  val showSpinner = (inProgress || isResetting) && (lastMsg == null || lastMsg is ChatMessageLoading)
   val displayText: String? =
     (lastMsg as? ChatMessageText)
       ?.takeIf { it.side == ChatSide.AGENT }
@@ -278,7 +281,7 @@ fun ChineseWritingScreen(
     ) {
       OutlinedButton(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && !inProgress,
+        enabled = hasDrawing && !inProgress && !isResetting,
         onClick = {
           strokes.clear()
           currentStroke = emptyList()
@@ -289,32 +292,42 @@ fun ChineseWritingScreen(
       }
       Button(
         modifier = Modifier.weight(1f),
-        enabled = hasDrawing && modelReady && !inProgress,
+        enabled = hasDrawing && modelReady && !inProgress && !isResetting,
         onClick = {
           val task = modelManagerViewModel.getTaskById(BuiltInTaskId.LLM_CHINESE_WRITING)!!
           val bitmap = strokesToBitmap(strokes.toList())
-          // Clear the previous result from the display so the UI starts fresh.
-          // We intentionally do NOT reset the underlying conversation — resetSession
-          // has a stale-callback race that lets old tokens bleed into the new result,
-          // and engine KV-cache resets are unreliable across backends. The conversation
-          // accumulates history but the model always responds to the latest turn
-          // (identical to how Ask Image works, which gives correct results).
+          // Step 1 — clear the previous result from the display immediately.
           viewModel.clearAllMessages(model = model)
-          viewModel.generateResponse(
+          // Step 2 — reset the conversation so each identification is fully independent
+          // with no KV-cache or history from the previous character. clearHistory=false
+          // because we already cleared the UI in step 1; resetSession would otherwise
+          // try to clear again and race with the callbacks. The isResettingSession flag
+          // keeps both buttons disabled and the spinner visible throughout the whole
+          // reset → generate cycle, preventing any double-tap window.
+          viewModel.resetSession(
+            task = task,
             model = model,
-            input = IDENTIFY_PROMPT,
-            images = listOf(bitmap),
-            audioMessages = emptyList(),
-            onError = { errorMessage ->
-              viewModel.handleError(
-                context = context,
-                task = task,
+            supportImage = true,
+            supportAudio = false,
+            clearHistory = false,
+            onDone = {
+              viewModel.generateResponse(
                 model = model,
-                modelManagerViewModel = modelManagerViewModel,
-                errorMessage = errorMessage,
+                input = IDENTIFY_PROMPT,
+                images = listOf(bitmap),
+                audioMessages = emptyList(),
+                onError = { errorMessage ->
+                  viewModel.handleError(
+                    context = context,
+                    task = task,
+                    model = model,
+                    modelManagerViewModel = modelManagerViewModel,
+                    errorMessage = errorMessage,
+                  )
+                },
+                allowThinking = false,
               )
             },
-            allowThinking = false,
           )
         },
       ) {
