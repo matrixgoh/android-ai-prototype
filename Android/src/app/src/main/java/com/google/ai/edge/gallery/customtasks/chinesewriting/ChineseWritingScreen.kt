@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.BuiltInTaskId
@@ -66,6 +67,9 @@ import com.google.ai.edge.gallery.ui.common.chat.ChatMessageLoading
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageText
 import com.google.ai.edge.gallery.ui.common.chat.ChatSide
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+
+/** Increment this every time the screen logic changes so testers can confirm the right build. */
+private const val SCREEN_VERSION = "v5"
 
 private const val OUTPUT_PX = 512
 
@@ -180,11 +184,27 @@ fun ChineseWritingScreen(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
-    Text(
-      text = stringResource(R.string.chinese_writing_instruction),
-      style = MaterialTheme.typography.titleMedium,
-      textAlign = TextAlign.Center,
-    )
+    // Title row: instruction on the left, version badge on the right.
+    Box(modifier = Modifier.fillMaxWidth()) {
+      Text(
+        text = stringResource(R.string.chinese_writing_instruction),
+        style = MaterialTheme.typography.titleMedium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.align(Alignment.Center),
+      )
+      Text(
+        text = SCREEN_VERSION,
+        fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        modifier =
+          Modifier.align(Alignment.CenterEnd)
+            .background(
+              color = MaterialTheme.colorScheme.surfaceVariant,
+              shape = RoundedCornerShape(4.dp),
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+      )
+    }
 
     // Drawing canvas: white square with black ink.
     Box(
