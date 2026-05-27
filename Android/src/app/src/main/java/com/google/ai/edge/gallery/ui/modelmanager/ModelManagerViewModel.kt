@@ -639,6 +639,7 @@ constructor(
         BuiltInTaskId.LLM_TINY_GARDEN,
         BuiltInTaskId.LLM_MOBILE_ACTIONS,
         BuiltInTaskId.LLM_AGENT_CHAT,
+        BuiltInTaskId.LLM_CHINESE_WRITING,
       )
     for (task in getTasksByIds(ids = setOfTasks)) {
       // Remove duplicated imported model if existed.
@@ -649,10 +650,12 @@ constructor(
       }
       if (
         (task.id == BuiltInTaskId.LLM_ASK_IMAGE && model.llmSupportImage) ||
+          (task.id == BuiltInTaskId.LLM_CHINESE_WRITING && model.llmSupportImage) ||
           (task.id == BuiltInTaskId.LLM_ASK_AUDIO && model.llmSupportAudio) ||
           (task.id == BuiltInTaskId.LLM_TINY_GARDEN && model.llmSupportTinyGarden) ||
           (task.id == BuiltInTaskId.LLM_MOBILE_ACTIONS && model.llmSupportMobileActions) ||
           (task.id != BuiltInTaskId.LLM_ASK_IMAGE &&
+            task.id != BuiltInTaskId.LLM_CHINESE_WRITING &&
             task.id != BuiltInTaskId.LLM_ASK_AUDIO &&
             task.id != BuiltInTaskId.LLM_TINY_GARDEN &&
             task.id != BuiltInTaskId.LLM_MOBILE_ACTIONS)
@@ -990,6 +993,11 @@ constructor(
               model.configs = newConfigs
             }
           }
+
+          // Vision-capable models also power the Chinese Writing task.
+          if (model.llmSupportImage) {
+            curTasks.find { it.id == BuiltInTaskId.LLM_CHINESE_WRITING }?.models?.add(model)
+          }
         }
 
         // Find models from allowlist if a task's `modelNames` field is not empty.
@@ -1134,6 +1142,7 @@ constructor(
       tasks.get(key = BuiltInTaskId.LLM_AGENT_CHAT)?.models?.add(model)
       if (model.llmSupportImage) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_IMAGE)?.models?.add(model)
+        tasks.get(key = BuiltInTaskId.LLM_CHINESE_WRITING)?.models?.add(model)
       }
       if (model.llmSupportAudio) {
         tasks.get(key = BuiltInTaskId.LLM_ASK_AUDIO)?.models?.add(model)

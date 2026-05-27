@@ -33,6 +33,11 @@
   <string name="askimage_emptystate_title" translatable="false">Ask Image</string>
   <string name="askimage_emptystate_content" translatable="false">To get started, tap the + below to add an image (max 10 images per chat) and type a prompt to ask a question about it!</string>
   <string name="askimage_emptystate_content_aicore" translatable="false">To get started, tap the + below to add an image (max 1 image per chat) and type a prompt to ask a question about it!</string>
+  <string name="chinese_writing_instruction" translatable="false">Draw one Chinese character</string>
+  <string name="chinese_writing_empty_hint" translatable="false">Draw a character above, then tap Identify</string>
+  <string name="chinese_writing_model_loading" translatable="false">Loading model…</string>
+  <string name="chinese_writing_btn_clear" translatable="false">Clear</string>
+  <string name="chinese_writing_btn_identify" translatable="false">Identify</string>
   <string name="askaudio_emptystate_title" translatable="false">Ask Audio</string>
   <string name="askaudio_emptystate_content" translatable="false">To get started, tap the + below to add a audio clip (limited to 1 clip up to 30 seconds) and type a prompt to transcribe or translate it!</string>
   <string name="gallery_news_notification_title" translatable="false">Gallery News</string>
